@@ -1,0 +1,728 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0, user-scalable=no">
+<title>Glow Pop</title>
+<style>
+* { margin: 0; padding: 0; box-sizing: border-box; -webkit-tap-highlight-color: transparent; }
+html, body { width: 100%; height: 100%; overflow: hidden; touch-action: none; user-select: none; -webkit-user-select: none; }
+body { background: #0a0a1a; font-family: 'Segoe UI', system-ui, -apple-system, sans-serif; }
+
+canvas { display: block; width: 100%; height: 100%; }
+
+/* UI Overlays */
+.overlay {
+  position: fixed; top: 0; left: 0; width: 100%; height: 100%;
+  display: flex; flex-direction: column; align-items: center; justify-content: center;
+  background: rgba(10, 10, 26, 0.92); z-index: 100;
+  transition: opacity 0.3s;
+}
+.overlay.hidden { opacity: 0; pointer-events: none; }
+
+.title {
+  font-size: 3rem; font-weight: 900; letter-spacing: 2px;
+  background: linear-gradient(135deg, #ff6ec7, #7b68ee, #00d4ff);
+  -webkit-background-clip: text; -webkit-text-fill-color: transparent;
+  text-shadow: 0 0 40px rgba(123, 104, 238, 0.4);
+  margin-bottom: 0.5rem;
+}
+.subtitle { color: #8888aa; font-size: 1rem; margin-bottom: 2rem; }
+
+.btn {
+  padding: 16px 48px; border: none; border-radius: 50px; font-size: 1.2rem;
+  font-weight: 700; cursor: pointer; margin: 8px;
+  background: linear-gradient(135deg, #7b68ee, #00d4ff);
+  color: white; box-shadow: 0 4px 24px rgba(123, 104, 238, 0.4);
+  transition: transform 0.15s, box-shadow 0.15s;
+  -webkit-tap-highlight-color: transparent;
+}
+.btn:active { transform: scale(0.95); box-shadow: 0 2px 12px rgba(123, 104, 238, 0.3); }
+
+.stats { color: #aaa; font-size: 0.9rem; margin-top: 1.5rem; text-align: center; line-height: 1.8; }
+
+/* HUD */
+#hud {
+  position: fixed; top: 0; left: 0; right: 0; padding: 12px 16px;
+  display: flex; justify-content: space-between; align-items: center;
+  z-index: 50; pointer-events: none;
+  background: linear-gradient(to bottom, rgba(10,10,26,0.7), transparent);
+}
+.hud-item {
+  color: white; font-size: 0.85rem; font-weight: 600;
+  display: flex; align-items: center; gap: 4px;
+}
+.hud-item .icon { font-size: 1.1rem; }
+.hud-score { font-size: 1.3rem; font-weight: 900; }
+.hud-level {
+  background: rgba(123, 104, 238, 0.3); padding: 4px 12px;
+  border-radius: 20px; border: 1px solid rgba(123, 104, 238, 0.5);
+}
+
+/* Level Complete */
+.level-info {
+  font-size: 4rem; font-weight: 900; color: #7b68ee;
+  text-shadow: 0 0 60px rgba(123, 104, 238, 0.6);
+  animation: pulseIn 0.5s ease-out;
+}
+.level-sub { color: #aaa; font-size: 1.1rem; margin: 8px 0 24px; }
+
+/* Combo popup */
+.combo-popup {
+  position: fixed; left: 50%; transform: translateX(-50%);
+  font-size: 1.5rem; font-weight: 900; color: #ffd700;
+  text-shadow: 0 0 20px rgba(255, 215, 0, 0.6);
+  pointer-events: none; z-index: 60;
+  animation: comboFloat 1s ease-out forwards;
+}
+
+/* Extra life popup */
+.life-popup {
+  position: fixed; left: 50%; top: 40%; transform: translate(-50%, -50%);
+  font-size: 2rem; font-weight: 900; color: #ff6ec7;
+  text-shadow: 0 0 30px rgba(255, 110, 199, 0.8);
+  pointer-events: none; z-index: 60;
+  animation: lifeFloat 1.5s ease-out forwards;
+}
+
+@keyframes pulseIn { from { transform: scale(0.5); opacity: 0; } to { transform: scale(1); opacity: 1; } }
+@keyframes comboFloat { 0% { opacity: 1; top: 60%; } 100% { opacity: 0; top: 45%; } }
+@keyframes lifeFloat { 0% { opacity: 1; transform: translate(-50%, -50%) scale(1); } 100% { opacity: 0; transform: translate(-50%, -70%) scale(1.5); } }
+</style>
+</head>
+<body>
+
+<canvas id="gameCanvas"></canvas>
+
+<div id="hud" style="display:none;">
+  <div class="hud-item hud-level" id="hudLevel">Level 1</div>
+  <div class="hud-item hud-score" id="hudScore">0</div>
+  <div class="hud-item" id="hudLives"><span class="icon">&#10084;</span> <span id="livesCount">3</span></div>
+</div>
+
+<!-- Start Screen -->
+<div class="overlay" id="startScreen">
+  <div class="title">GLOW POP</div>
+  <div class="subtitle">Tap the glowing orbs before they escape!</div>
+  <button class="btn" onclick="startGame()">PLAY</button>
+  <div class="stats">
+    Tap orbs to score points<br>
+    Build combos for bonus points<br>
+    Catch golden stars for extra lives!
+  </div>
+</div>
+
+<!-- Level Complete Screen -->
+<div class="overlay hidden" id="levelScreen">
+  <div class="level-info" id="levelTitle">Level 2</div>
+  <div class="level-sub" id="levelSub">Great job!</div>
+  <button class="btn" onclick="nextLevel()">CONTINUE</button>
+  <div class="stats" id="levelStats"></div>
+</div>
+
+<!-- Game Over Screen -->
+<div class="overlay hidden" id="gameOverScreen">
+  <div class="level-info" style="color: #ff6ec7;">GAME OVER</div>
+  <div class="level-sub" id="finalScoreText">Score: 0</div>
+  <button class="btn" onclick="startGame()">PLAY AGAIN</button>
+  <div class="stats" id="gameOverStats"></div>
+</div>
+
+<!-- Win Screen -->
+<div class="overlay hidden" id="winScreen">
+  <div class="title">YOU WIN!</div>
+  <div class="level-sub" id="winScore">Amazing!</div>
+  <button class="btn" onclick="startGame()">PLAY AGAIN</button>
+  <div class="stats" id="winStats"></div>
+</div>
+
+<script>
+// ==================== SOUND ENGINE (Web Audio API) ====================
+const AudioCtx = window.AudioContext || window.webkitAudioContext;
+let audioCtx;
+
+function ensureAudio() {
+  if (!audioCtx) audioCtx = new AudioCtx();
+  if (audioCtx.state === 'suspended') audioCtx.resume();
+}
+
+function playPop(pitch = 1) {
+  ensureAudio();
+  const osc = audioCtx.createOscillator();
+  const gain = audioCtx.createGain();
+  osc.connect(gain);
+  gain.connect(audioCtx.destination);
+  osc.type = 'sine';
+  osc.frequency.setValueAtTime(600 * pitch, audioCtx.currentTime);
+  osc.frequency.exponentialRampToValueAtTime(1200 * pitch, audioCtx.currentTime + 0.05);
+  osc.frequency.exponentialRampToValueAtTime(200, audioCtx.currentTime + 0.15);
+  gain.gain.setValueAtTime(0.3, audioCtx.currentTime);
+  gain.gain.exponentialRampToValueAtTime(0.001, audioCtx.currentTime + 0.2);
+  osc.start(audioCtx.currentTime);
+  osc.stop(audioCtx.currentTime + 0.2);
+}
+
+function playCombo(level) {
+  ensureAudio();
+  const notes = [523, 659, 784, 1047, 1319];
+  const idx = Math.min(level - 1, notes.length - 1);
+  for (let i = 0; i <= idx; i++) {
+    const osc = audioCtx.createOscillator();
+    const gain = audioCtx.createGain();
+    osc.connect(gain);
+    gain.connect(audioCtx.destination);
+    osc.type = 'triangle';
+    osc.frequency.value = notes[i];
+    gain.gain.setValueAtTime(0.15, audioCtx.currentTime + i * 0.07);
+    gain.gain.exponentialRampToValueAtTime(0.001, audioCtx.currentTime + i * 0.07 + 0.2);
+    osc.start(audioCtx.currentTime + i * 0.07);
+    osc.stop(audioCtx.currentTime + i * 0.07 + 0.2);
+  }
+}
+
+function playExtraLife() {
+  ensureAudio();
+  const melody = [523, 659, 784, 1047];
+  melody.forEach((freq, i) => {
+    const osc = audioCtx.createOscillator();
+    const gain = audioCtx.createGain();
+    osc.connect(gain);
+    gain.connect(audioCtx.destination);
+    osc.type = 'sine';
+    osc.frequency.value = freq;
+    gain.gain.setValueAtTime(0.2, audioCtx.currentTime + i * 0.1);
+    gain.gain.exponentialRampToValueAtTime(0.001, audioCtx.currentTime + i * 0.1 + 0.3);
+    osc.start(audioCtx.currentTime + i * 0.1);
+    osc.stop(audioCtx.currentTime + i * 0.1 + 0.3);
+  });
+}
+
+function playMiss() {
+  ensureAudio();
+  const osc = audioCtx.createOscillator();
+  const gain = audioCtx.createGain();
+  osc.connect(gain);
+  gain.connect(audioCtx.destination);
+  osc.type = 'sawtooth';
+  osc.frequency.setValueAtTime(200, audioCtx.currentTime);
+  osc.frequency.exponentialRampToValueAtTime(80, audioCtx.currentTime + 0.3);
+  gain.gain.setValueAtTime(0.15, audioCtx.currentTime);
+  gain.gain.exponentialRampToValueAtTime(0.001, audioCtx.currentTime + 0.3);
+  osc.start(audioCtx.currentTime);
+  osc.stop(audioCtx.currentTime + 0.3);
+}
+
+function playLevelUp() {
+  ensureAudio();
+  const melody = [392, 523, 659, 784, 1047];
+  melody.forEach((freq, i) => {
+    const osc = audioCtx.createOscillator();
+    const gain = audioCtx.createGain();
+    osc.connect(gain);
+    gain.connect(audioCtx.destination);
+    osc.type = 'square';
+    osc.frequency.value = freq;
+    gain.gain.setValueAtTime(0.1, audioCtx.currentTime + i * 0.12);
+    gain.gain.exponentialRampToValueAtTime(0.001, audioCtx.currentTime + i * 0.12 + 0.25);
+    osc.start(audioCtx.currentTime + i * 0.12);
+    osc.stop(audioCtx.currentTime + i * 0.12 + 0.25);
+  });
+}
+
+function playGameOver() {
+  ensureAudio();
+  const melody = [440, 370, 311, 261];
+  melody.forEach((freq, i) => {
+    const osc = audioCtx.createOscillator();
+    const gain = audioCtx.createGain();
+    osc.connect(gain);
+    gain.connect(audioCtx.destination);
+    osc.type = 'sawtooth';
+    osc.frequency.value = freq;
+    gain.gain.setValueAtTime(0.12, audioCtx.currentTime + i * 0.2);
+    gain.gain.exponentialRampToValueAtTime(0.001, audioCtx.currentTime + i * 0.2 + 0.4);
+    osc.start(audioCtx.currentTime + i * 0.2);
+    osc.stop(audioCtx.currentTime + i * 0.2 + 0.4);
+  });
+}
+
+// ==================== GAME ENGINE ====================
+const canvas = document.getElementById('gameCanvas');
+const ctx = canvas.getContext('2d');
+
+let W, H, dpr;
+function resize() {
+  dpr = window.devicePixelRatio || 1;
+  W = window.innerWidth;
+  H = window.innerHeight;
+  canvas.width = W * dpr;
+  canvas.height = H * dpr;
+  ctx.scale(dpr, dpr);
+}
+resize();
+window.addEventListener('resize', resize);
+
+// Game state
+let orbs = [];
+let particles = [];
+let score = 0;
+let lives = 3;
+let level = 1;
+let combo = 0;
+let comboTimer = 0;
+let orbsPopped = 0;
+let orbsMissed = 0;
+let totalPopped = 0;
+let orbsNeeded = 0;
+let orbsSpawned = 0;
+let gameRunning = false;
+let spawnTimer = 0;
+let bgStars = [];
+
+// Level configs
+const LEVELS = [
+  { orbs: 10, speed: 1.0, spawnRate: 1.8, colors: 2, minSize: 32, maxSize: 50, name: "Warm Up" },
+  { orbs: 15, speed: 1.2, spawnRate: 1.5, colors: 3, minSize: 30, maxSize: 48, name: "Getting Started" },
+  { orbs: 20, speed: 1.4, spawnRate: 1.3, colors: 3, minSize: 28, maxSize: 46, name: "Picking Up" },
+  { orbs: 25, speed: 1.6, spawnRate: 1.1, colors: 4, minSize: 26, maxSize: 44, name: "Faster!" },
+  { orbs: 30, speed: 1.8, spawnRate: 1.0, colors: 4, minSize: 24, maxSize: 42, name: "Tricky" },
+  { orbs: 35, speed: 2.0, spawnRate: 0.9, colors: 5, minSize: 22, maxSize: 40, name: "Intense" },
+  { orbs: 40, speed: 2.2, spawnRate: 0.8, colors: 5, minSize: 20, maxSize: 38, name: "Frenzy" },
+  { orbs: 45, speed: 2.4, spawnRate: 0.7, colors: 6, minSize: 20, maxSize: 36, name: "Chaos" },
+  { orbs: 50, speed: 2.6, spawnRate: 0.6, colors: 6, minSize: 18, maxSize: 34, name: "Insane" },
+  { orbs: 60, speed: 2.8, spawnRate: 0.5, colors: 7, minSize: 16, maxSize: 32, name: "FINAL BOSS" },
+];
+
+const ORB_COLORS = [
+  { h: 280, s: 80, l: 65, glow: 'rgba(160, 100, 255, 0.5)' },   // Purple
+  { h: 190, s: 90, l: 55, glow: 'rgba(0, 200, 255, 0.5)' },     // Cyan
+  { h: 330, s: 85, l: 65, glow: 'rgba(255, 100, 180, 0.5)' },   // Pink
+  { h: 140, s: 80, l: 55, glow: 'rgba(50, 220, 100, 0.5)' },    // Green
+  { h: 40, s: 90, l: 60, glow: 'rgba(255, 180, 50, 0.5)' },     // Orange
+  { h: 60, s: 95, l: 55, glow: 'rgba(255, 230, 50, 0.5)' },     // Yellow
+  { h: 0, s: 85, l: 60, glow: 'rgba(255, 80, 80, 0.5)' },       // Red
+];
+
+// Init background stars
+function initStars() {
+  bgStars = [];
+  for (let i = 0; i < 80; i++) {
+    bgStars.push({
+      x: Math.random() * W,
+      y: Math.random() * H,
+      size: Math.random() * 2 + 0.5,
+      alpha: Math.random() * 0.5 + 0.1,
+      twinkleSpeed: Math.random() * 0.02 + 0.005,
+      twinklePhase: Math.random() * Math.PI * 2,
+    });
+  }
+}
+initStars();
+
+// Orb class
+function createOrb(isExtraLife = false) {
+  const lvl = LEVELS[level - 1];
+  const size = lvl.minSize + Math.random() * (lvl.maxSize - lvl.minSize);
+  const colorIdx = Math.floor(Math.random() * Math.min(lvl.colors, ORB_COLORS.length));
+  const color = ORB_COLORS[colorIdx];
+
+  return {
+    x: size + Math.random() * (W - size * 2),
+    y: H + size,
+    size: size,
+    baseSize: size,
+    vx: (Math.random() - 0.5) * lvl.speed * 0.8,
+    vy: -(1 + Math.random() * 1.5) * lvl.speed,
+    color: color,
+    isExtraLife: isExtraLife,
+    pulse: 0,
+    born: Date.now(),
+    wobble: Math.random() * Math.PI * 2,
+    wobbleSpeed: 1 + Math.random() * 2,
+  };
+}
+
+// Particle system
+function spawnParticles(x, y, color, count, isExtraLife) {
+  for (let i = 0; i < count; i++) {
+    const angle = (Math.PI * 2 * i) / count + Math.random() * 0.3;
+    const speed = 2 + Math.random() * 5;
+    particles.push({
+      x, y,
+      vx: Math.cos(angle) * speed,
+      vy: Math.sin(angle) * speed,
+      size: 3 + Math.random() * 5,
+      life: 1,
+      decay: 0.02 + Math.random() * 0.02,
+      color: isExtraLife ? { h: 50, s: 100, l: 60 } : color,
+    });
+  }
+}
+
+// ==================== GAME LOGIC ====================
+function startGame() {
+  score = 0;
+  lives = 3;
+  level = 1;
+  totalPopped = 0;
+  combo = 0;
+  comboTimer = 0;
+  orbs = [];
+  particles = [];
+  orbsPopped = 0;
+  orbsMissed = 0;
+  orbsSpawned = 0;
+  orbsNeeded = LEVELS[0].orbs;
+  spawnTimer = 0;
+  gameRunning = true;
+
+  document.getElementById('startScreen').classList.add('hidden');
+  document.getElementById('levelScreen').classList.add('hidden');
+  document.getElementById('gameOverScreen').classList.add('hidden');
+  document.getElementById('winScreen').classList.add('hidden');
+  document.getElementById('hud').style.display = 'flex';
+  updateHUD();
+}
+
+function nextLevel() {
+  level++;
+  if (level > LEVELS.length) {
+    gameWin();
+    return;
+  }
+  orbsPopped = 0;
+  orbsMissed = 0;
+  orbsSpawned = 0;
+  orbsNeeded = LEVELS[level - 1].orbs;
+  spawnTimer = 0;
+  orbs = [];
+  combo = 0;
+  comboTimer = 0;
+  gameRunning = true;
+
+  document.getElementById('levelScreen').classList.add('hidden');
+  updateHUD();
+}
+
+function levelComplete() {
+  gameRunning = false;
+  playLevelUp();
+
+  const el = document.getElementById('levelScreen');
+  const next = level + 1;
+  document.getElementById('levelTitle').textContent = next <= LEVELS.length ? `Level ${next}` : 'Victory!';
+  document.getElementById('levelSub').textContent = next <= LEVELS.length ? LEVELS[next - 1].name : 'You completed all levels!';
+  document.getElementById('levelStats').innerHTML =
+    `Orbs Popped: ${orbsPopped}<br>Score: ${score}<br>Lives: ${'&#10084;'.repeat(lives)}`;
+  el.classList.remove('hidden');
+}
+
+function gameOver() {
+  gameRunning = false;
+  playGameOver();
+
+  document.getElementById('finalScoreText').textContent = `Score: ${score}`;
+  document.getElementById('gameOverStats').innerHTML =
+    `Level Reached: ${level}<br>Total Orbs Popped: ${totalPopped}`;
+  document.getElementById('gameOverScreen').classList.remove('hidden');
+  document.getElementById('hud').style.display = 'none';
+}
+
+function gameWin() {
+  gameRunning = false;
+  playLevelUp();
+
+  document.getElementById('winScore').textContent = `Final Score: ${score}`;
+  document.getElementById('winStats').innerHTML =
+    `All 10 levels complete!<br>Total Orbs Popped: ${totalPopped}<br>Lives Remaining: ${lives}`;
+  document.getElementById('winScreen').classList.remove('hidden');
+  document.getElementById('hud').style.display = 'none';
+}
+
+function updateHUD() {
+  document.getElementById('hudLevel').textContent = `Lv ${level}`;
+  document.getElementById('hudScore').textContent = score;
+  document.getElementById('livesCount').textContent = lives;
+}
+
+// ==================== INPUT ====================
+function handleTap(px, py) {
+  if (!gameRunning) return;
+  ensureAudio();
+
+  let hit = false;
+  // Check from top (newest) to bottom
+  for (let i = orbs.length - 1; i >= 0; i--) {
+    const orb = orbs[i];
+    const dx = px - orb.x;
+    const dy = py - orb.y;
+    const dist = Math.sqrt(dx * dx + dy * dy);
+
+    if (dist <= orb.size * 1.2) {
+      hit = true;
+
+      if (orb.isExtraLife) {
+        lives++;
+        playExtraLife();
+        showLifePopup();
+        spawnParticles(orb.x, orb.y, orb.color, 20, true);
+      } else {
+        combo++;
+        comboTimer = 2;
+        const comboMultiplier = Math.min(combo, 10);
+        const points = 10 * comboMultiplier;
+        score += points;
+        orbsPopped++;
+        totalPopped++;
+
+        playPop(0.8 + combo * 0.1);
+        if (combo >= 3) {
+          playCombo(combo);
+          showComboPopup(combo, py);
+        }
+
+        spawnParticles(orb.x, orb.y, orb.color, 12, false);
+      }
+
+      orbs.splice(i, 1);
+      updateHUD();
+
+      // Check level completion
+      if (orbsPopped >= orbsNeeded && orbsSpawned >= orbsNeeded) {
+        // Wait for remaining orbs to clear or just complete
+        if (orbs.filter(o => !o.isExtraLife).length === 0) {
+          levelComplete();
+        }
+      }
+      break;
+    }
+  }
+
+  if (!hit) {
+    // Reset combo on miss
+    combo = 0;
+    comboTimer = 0;
+  }
+}
+
+canvas.addEventListener('touchstart', (e) => {
+  e.preventDefault();
+  for (let t of e.changedTouches) {
+    handleTap(t.clientX, t.clientY);
+  }
+}, { passive: false });
+
+canvas.addEventListener('mousedown', (e) => {
+  handleTap(e.clientX, e.clientY);
+});
+
+// ==================== UI POPUPS ====================
+function showComboPopup(combo, y) {
+  const el = document.createElement('div');
+  el.className = 'combo-popup';
+  el.textContent = `${combo}x COMBO!`;
+  el.style.top = y + 'px';
+  document.body.appendChild(el);
+  setTimeout(() => el.remove(), 1000);
+}
+
+function showLifePopup() {
+  const el = document.createElement('div');
+  el.className = 'life-popup';
+  el.textContent = '+1 LIFE!';
+  document.body.appendChild(el);
+  setTimeout(() => el.remove(), 1500);
+}
+
+// ==================== RENDER ====================
+let lastTime = 0;
+
+function gameLoop(timestamp) {
+  const dt = Math.min((timestamp - lastTime) / 1000, 0.05);
+  lastTime = timestamp;
+
+  // Clear
+  ctx.fillStyle = '#0a0a1a';
+  ctx.fillRect(0, 0, W, H);
+
+  // Draw background stars
+  bgStars.forEach(star => {
+    star.twinklePhase += star.twinkleSpeed;
+    const alpha = star.alpha * (0.5 + 0.5 * Math.sin(star.twinklePhase));
+    ctx.fillStyle = `rgba(200, 210, 255, ${alpha})`;
+    ctx.beginPath();
+    ctx.arc(star.x, star.y, star.size, 0, Math.PI * 2);
+    ctx.fill();
+  });
+
+  if (gameRunning) {
+    const lvl = LEVELS[level - 1];
+
+    // Spawn orbs
+    spawnTimer -= dt;
+    if (spawnTimer <= 0 && orbsSpawned < orbsNeeded) {
+      // Chance for extra life orb (every ~15 orbs)
+      const isExtra = orbsSpawned > 0 && orbsSpawned % 15 === 0 && Math.random() < 0.6;
+      orbs.push(createOrb(isExtra));
+      orbsSpawned++;
+      spawnTimer = lvl.spawnRate * (0.7 + Math.random() * 0.6);
+    }
+
+    // Spawn extra life independently occasionally
+    if (Math.random() < 0.0005 * lvl.speed) {
+      orbs.push(createOrb(true));
+    }
+
+    // Update combo timer
+    if (comboTimer > 0) {
+      comboTimer -= dt;
+      if (comboTimer <= 0) {
+        combo = 0;
+      }
+    }
+
+    // Update orbs
+    for (let i = orbs.length - 1; i >= 0; i--) {
+      const orb = orbs[i];
+      orb.x += orb.vx * 60 * dt;
+      orb.y += orb.vy * 60 * dt;
+      orb.wobble += orb.wobbleSpeed * dt;
+      orb.x += Math.sin(orb.wobble) * 0.5;
+      orb.pulse += dt * 3;
+
+      // Bounce off walls
+      if (orb.x - orb.size < 0) { orb.x = orb.size; orb.vx = Math.abs(orb.vx); }
+      if (orb.x + orb.size > W) { orb.x = W - orb.size; orb.vx = -Math.abs(orb.vx); }
+
+      // Off top of screen
+      if (orb.y + orb.size < -20) {
+        orbs.splice(i, 1);
+        if (!orb.isExtraLife) {
+          orbsMissed++;
+          lives--;
+          playMiss();
+          updateHUD();
+
+          if (lives <= 0) {
+            gameOver();
+            return;
+          }
+        }
+        continue;
+      }
+
+      // Pulsing size
+      orb.size = orb.baseSize + Math.sin(orb.pulse) * 2;
+    }
+
+    // Check if level complete (all spawned, all popped or missed)
+    if (orbsSpawned >= orbsNeeded && orbs.filter(o => !o.isExtraLife).length === 0 && orbsPopped + orbsMissed >= orbsNeeded) {
+      if (orbsPopped >= Math.ceil(orbsNeeded * 0.3)) {
+        levelComplete();
+      } else {
+        gameOver();
+      }
+    }
+  }
+
+  // Draw orbs
+  orbs.forEach(orb => {
+    ctx.save();
+
+    if (orb.isExtraLife) {
+      // Golden star orb
+      const glow = 15 + Math.sin(orb.pulse * 2) * 8;
+      ctx.shadowColor = 'rgba(255, 215, 0, 0.8)';
+      ctx.shadowBlur = glow;
+
+      // Draw star shape
+      ctx.fillStyle = `hsl(50, 100%, ${55 + Math.sin(orb.pulse) * 10}%)`;
+      ctx.beginPath();
+      for (let j = 0; j < 5; j++) {
+        const angle = (j * 4 * Math.PI) / 5 - Math.PI / 2;
+        const r = orb.size * 0.9;
+        if (j === 0) ctx.moveTo(orb.x + r * Math.cos(angle), orb.y + r * Math.sin(angle));
+        else ctx.lineTo(orb.x + r * Math.cos(angle), orb.y + r * Math.sin(angle));
+      }
+      ctx.closePath();
+      ctx.fill();
+
+      // Inner glow
+      const grad = ctx.createRadialGradient(orb.x, orb.y, 0, orb.x, orb.y, orb.size);
+      grad.addColorStop(0, 'rgba(255, 255, 200, 0.6)');
+      grad.addColorStop(1, 'rgba(255, 215, 0, 0)');
+      ctx.fillStyle = grad;
+      ctx.beginPath();
+      ctx.arc(orb.x, orb.y, orb.size, 0, Math.PI * 2);
+      ctx.fill();
+    } else {
+      // Normal glowing orb
+      const c = orb.color;
+      const glowSize = 10 + Math.sin(orb.pulse) * 5;
+      ctx.shadowColor = c.glow;
+      ctx.shadowBlur = glowSize;
+
+      // Outer glow
+      const grad = ctx.createRadialGradient(orb.x, orb.y, 0, orb.x, orb.y, orb.size);
+      grad.addColorStop(0, `hsla(${c.h}, ${c.s}%, ${c.l + 20}%, 0.9)`);
+      grad.addColorStop(0.5, `hsla(${c.h}, ${c.s}%, ${c.l}%, 0.7)`);
+      grad.addColorStop(1, `hsla(${c.h}, ${c.s}%, ${c.l - 10}%, 0)`);
+      ctx.fillStyle = grad;
+      ctx.beginPath();
+      ctx.arc(orb.x, orb.y, orb.size, 0, Math.PI * 2);
+      ctx.fill();
+
+      // Inner highlight
+      const inner = ctx.createRadialGradient(
+        orb.x - orb.size * 0.2, orb.y - orb.size * 0.3, 0,
+        orb.x, orb.y, orb.size * 0.6
+      );
+      inner.addColorStop(0, `hsla(${c.h}, 100%, 90%, 0.6)`);
+      inner.addColorStop(1, `hsla(${c.h}, ${c.s}%, ${c.l}%, 0)`);
+      ctx.fillStyle = inner;
+      ctx.beginPath();
+      ctx.arc(orb.x, orb.y, orb.size * 0.7, 0, Math.PI * 2);
+      ctx.fill();
+    }
+
+    ctx.restore();
+  });
+
+  // Update and draw particles
+  for (let i = particles.length - 1; i >= 0; i--) {
+    const p = particles[i];
+    p.x += p.vx * 60 * dt;
+    p.y += p.vy * 60 * dt;
+    p.vy += 3 * dt; // gravity
+    p.life -= p.decay;
+    p.size *= 0.98;
+
+    if (p.life <= 0 || p.size < 0.5) {
+      particles.splice(i, 1);
+      continue;
+    }
+
+    ctx.fillStyle = `hsla(${p.color.h}, ${p.color.s}%, ${p.color.l}%, ${p.life})`;
+    ctx.shadowColor = `hsla(${p.color.h}, ${p.color.s}%, ${p.color.l}%, ${p.life * 0.5})`;
+    ctx.shadowBlur = 8;
+    ctx.beginPath();
+    ctx.arc(p.x, p.y, p.size, 0, Math.PI * 2);
+    ctx.fill();
+    ctx.shadowBlur = 0;
+  }
+
+  // Combo indicator bar
+  if (combo >= 2 && gameRunning) {
+    const barWidth = Math.min(combo / 10, 1) * W * 0.6;
+    const barX = (W - W * 0.6) / 2;
+    ctx.fillStyle = `rgba(255, 215, 0, ${0.3 + Math.sin(Date.now() * 0.005) * 0.1})`;
+    ctx.fillRect(barX, H - 6, barWidth, 4);
+  }
+
+  requestAnimationFrame(gameLoop);
+}
+
+requestAnimationFrame(gameLoop);
+</script>
+</body>
+</html>
