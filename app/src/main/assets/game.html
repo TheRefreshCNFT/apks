@@ -275,6 +275,7 @@ let orbsMissed = 0;
 let totalPopped = 0;
 let orbsNeeded = 0;
 let orbsSpawned = 0;
+let starSpawnedThisRound = false;
 let gameRunning = false;
 let spawnTimer = 0;
 let bgStars = [];
@@ -372,6 +373,7 @@ function startGame() {
   orbsPopped = 0;
   orbsMissed = 0;
   orbsSpawned = 0;
+  starSpawnedThisRound = false;
   orbsNeeded = LEVELS[0].orbs;
   spawnTimer = 0;
   gameRunning = true;
@@ -393,6 +395,7 @@ function nextLevel() {
   orbsPopped = 0;
   orbsMissed = 0;
   orbsSpawned = 0;
+  starSpawnedThisRound = false;
   orbsNeeded = LEVELS[level - 1].orbs;
   spawnTimer = 0;
   orbs = [];
@@ -561,16 +564,15 @@ function gameLoop(timestamp) {
     // Spawn orbs
     spawnTimer -= dt;
     if (spawnTimer <= 0 && orbsSpawned < orbsNeeded) {
-      // Chance for extra life orb (every ~15 orbs)
-      const isExtra = orbsSpawned > 0 && orbsSpawned % 15 === 0 && Math.random() < 0.6;
-      orbs.push(createOrb(isExtra));
+      orbs.push(createOrb(false));
       orbsSpawned++;
       spawnTimer = lvl.spawnRate * (0.7 + Math.random() * 0.6);
     }
 
-    // Spawn extra life independently occasionally
-    if (Math.random() < 0.0005 * lvl.speed) {
+    // Spawn one star per round, only after round 3, roughly mid-round
+    if (level > 3 && !starSpawnedThisRound && orbsSpawned >= Math.floor(orbsNeeded / 2) && Math.random() < 0.02) {
       orbs.push(createOrb(true));
+      starSpawnedThisRound = true;
     }
 
     // Update combo timer
