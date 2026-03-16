@@ -21,13 +21,29 @@ canvas { display: block; width: 100%; height: 100%; }
 .overlay.hidden { opacity: 0; pointer-events: none; }
 
 .title {
-  font-size: 3rem; font-weight: 900; letter-spacing: 2px;
-  background: linear-gradient(135deg, #ff6ec7, #7b68ee, #00d4ff);
+  font-size: 4rem; font-weight: 900; letter-spacing: 6px;
+  background: linear-gradient(135deg, #ff6ec7, #7b68ee, #00d4ff, #ff6ec7);
+  background-size: 300% 300%;
   -webkit-background-clip: text; -webkit-text-fill-color: transparent;
-  text-shadow: 0 0 40px rgba(123, 104, 238, 0.4);
-  margin-bottom: 0.5rem;
+  animation: titleShimmer 3s ease-in-out infinite, titleFloat 2s ease-in-out infinite, titleGlow 2s ease-in-out infinite alternate;
+  filter: drop-shadow(0 0 30px rgba(123, 104, 238, 0.6)) drop-shadow(0 0 60px rgba(255, 110, 199, 0.3));
+  margin-bottom: 0.3rem;
+  position: relative;
 }
 .subtitle { color: #8888aa; font-size: 1rem; margin-bottom: 2rem; }
+.start-tagline {
+  font-size: 1.4rem; font-weight: 700; letter-spacing: 3px;
+  color: #aac;
+  margin-bottom: 0.8rem;
+  animation: taglinePulse 2s ease-in-out infinite;
+}
+.start-warning {
+  font-size: 1.1rem; font-weight: 600;
+  color: #ff6ec7;
+  text-shadow: 0 0 15px rgba(255, 110, 199, 0.5);
+  margin-bottom: 1.2rem;
+  animation: warningPulse 1.5s ease-in-out infinite;
+}
 
 .btn {
   padding: 16px 48px; border: none; border-radius: 50px; font-size: 1.2rem;
@@ -88,6 +104,11 @@ canvas { display: block; width: 100%; height: 100%; }
 @keyframes pulseIn { from { transform: scale(0.5); opacity: 0; } to { transform: scale(1); opacity: 1; } }
 @keyframes comboFloat { 0% { opacity: 1; top: 60%; } 100% { opacity: 0; top: 45%; } }
 @keyframes lifeFloat { 0% { opacity: 1; transform: translate(-50%, -50%) scale(1); } 100% { opacity: 0; transform: translate(-50%, -70%) scale(1.5); } }
+@keyframes titleShimmer { 0% { background-position: 0% 50%; } 50% { background-position: 100% 50%; } 100% { background-position: 0% 50%; } }
+@keyframes titleFloat { 0%, 100% { transform: translateY(0); } 50% { transform: translateY(-6px); } }
+@keyframes titleGlow { 0% { filter: drop-shadow(0 0 20px rgba(123, 104, 238, 0.4)) drop-shadow(0 0 40px rgba(255, 110, 199, 0.2)); } 100% { filter: drop-shadow(0 0 40px rgba(123, 104, 238, 0.8)) drop-shadow(0 0 80px rgba(255, 110, 199, 0.5)); } }
+@keyframes taglinePulse { 0%, 100% { opacity: 0.7; } 50% { opacity: 1; } }
+@keyframes warningPulse { 0%, 100% { opacity: 0.8; transform: scale(1); } 50% { opacity: 1; transform: scale(1.03); } }
 </style>
 </head>
 <body>
@@ -105,7 +126,8 @@ canvas { display: block; width: 100%; height: 100%; }
 <!-- Start Screen -->
 <div class="overlay" id="startScreen">
   <div class="title">GLOW POP</div>
-  <div class="subtitle">Tap the glowing orbs before they escape!</div>
+  <div class="start-tagline">Tap, pop. Score.</div>
+  <div class="start-warning">Don't let them escape!</div>
   <button class="btn" onclick="startGame()">PLAY</button>
   <div class="stats">
     Tap orbs to score points<br>
