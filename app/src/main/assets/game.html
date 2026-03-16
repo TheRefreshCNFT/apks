@@ -25,10 +25,8 @@ canvas { display: block; width: 100%; height: 100%; }
   background: linear-gradient(135deg, #ff6ec7, #7b68ee, #00d4ff, #ff6ec7);
   background-size: 300% 300%;
   -webkit-background-clip: text; -webkit-text-fill-color: transparent;
-  animation: titleShimmer 3s ease-in-out infinite, titleFloat 2s ease-in-out infinite, titleGlow 2s ease-in-out infinite alternate;
-  filter: drop-shadow(0 0 30px rgba(123, 104, 238, 0.6)) drop-shadow(0 0 60px rgba(255, 110, 199, 0.3));
+  animation: titleShimmer 3s ease-in-out infinite, titleFloat 2s ease-in-out infinite;
   margin-bottom: 0.3rem;
-  position: relative;
 }
 .subtitle { color: #8888aa; font-size: 1rem; margin-bottom: 2rem; }
 .start-tagline {
@@ -106,7 +104,6 @@ canvas { display: block; width: 100%; height: 100%; }
 @keyframes lifeFloat { 0% { opacity: 1; transform: translate(-50%, -50%) scale(1); } 100% { opacity: 0; transform: translate(-50%, -70%) scale(1.5); } }
 @keyframes titleShimmer { 0% { background-position: 0% 50%; } 50% { background-position: 100% 50%; } 100% { background-position: 0% 50%; } }
 @keyframes titleFloat { 0%, 100% { transform: translateY(0); } 50% { transform: translateY(-6px); } }
-@keyframes titleGlow { 0% { filter: drop-shadow(0 0 20px rgba(123, 104, 238, 0.4)) drop-shadow(0 0 40px rgba(255, 110, 199, 0.2)); } 100% { filter: drop-shadow(0 0 40px rgba(123, 104, 238, 0.8)) drop-shadow(0 0 80px rgba(255, 110, 199, 0.5)); } }
 @keyframes taglinePulse { 0%, 100% { opacity: 0.7; } 50% { opacity: 1; } }
 @keyframes warningPulse { 0%, 100% { opacity: 0.8; transform: scale(1); } 50% { opacity: 1; transform: scale(1.03); } }
 </style>
@@ -323,25 +320,26 @@ const LEVEL_NAMES = [
   "Intense", "Frenzy", "Chaos", "Insane", "Brutal",
   "Nightmare", "Overdrive", "Supernova", "Impossible", "FINAL BOSS"
 ];
-const LEVELS = [];
-{
-  let speed = 1.0;
-  let delta = 0.5;
-  for (let i = 0; i < 15; i++) {
-    const t = i / 14;
-    LEVELS.push({
+var LEVELS = (function() {
+  var levels = [];
+  var speed = 1.0;
+  var delta = 0.5;
+  for (var i = 0; i < 15; i++) {
+    var t = i / 14;
+    levels.push({
       orbs: Math.round(10 + t * 50),
       speed: speed,
       spawnRate: Math.max(0.15, 1.8 / speed),
       colors: Math.min(2 + Math.floor(t * 5), ORB_COLORS.length),
       minSize: Math.round(32 - t * 16),
       maxSize: Math.round(50 - t * 18),
-      name: LEVEL_NAMES[i],
+      name: LEVEL_NAMES[i]
     });
     speed += delta;
     delta += 0.25;
   }
-}
+  return levels;
+})();
 
 // Init background stars
 function initStars() {
