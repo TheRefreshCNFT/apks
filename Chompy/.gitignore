@@ -1,0 +1,5 @@
+build/
+debug.keystore
+*.class
+*.dex
+/etc/apt/
