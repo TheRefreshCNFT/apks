@@ -1,0 +1,1054 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0, user-scalable=no">
+<title>Chompy</title>
+<style>
+* { margin: 0; padding: 0; box-sizing: border-box; -webkit-tap-highlight-color: transparent; }
+html, body { width: 100%; height: 100%; overflow: hidden; touch-action: none; user-select: none; -webkit-user-select: none; }
+body { background: #0d1b2a; font-family: 'Segoe UI', system-ui, -apple-system, sans-serif; }
+
+canvas { display: block; width: 100%; height: 100%; }
+
+/* UI Overlays */
+.overlay {
+  position: fixed; top: 0; left: 0; width: 100%; height: 100%;
+  display: flex; flex-direction: column; align-items: center; justify-content: center;
+  background: rgba(13, 27, 42, 0.94); z-index: 100;
+  transition: opacity 0.3s;
+}
+.overlay.hidden { opacity: 0; pointer-events: none; }
+
+.title {
+  font-size: 3.2rem; font-weight: 900; letter-spacing: 3px;
+  background: linear-gradient(135deg, #7ed957, #f9c74f, #ff6b6b);
+  -webkit-background-clip: text; -webkit-text-fill-color: transparent;
+  margin-bottom: 0.3rem;
+}
+.subtitle { color: #a0b4c8; font-size: 1.05rem; margin-bottom: 2rem; letter-spacing: 1px; }
+
+.btn {
+  padding: 16px 52px; border: none; border-radius: 50px; font-size: 1.25rem;
+  font-weight: 700; cursor: pointer; margin: 8px;
+  background: linear-gradient(135deg, #7ed957, #43aa8b);
+  color: white; box-shadow: 0 4px 24px rgba(126, 217, 87, 0.35);
+  transition: transform 0.15s, box-shadow 0.15s;
+  -webkit-tap-highlight-color: transparent;
+}
+.btn:active { transform: scale(0.95); box-shadow: 0 2px 12px rgba(126, 217, 87, 0.25); }
+
+.stats { color: #7a92a8; font-size: 0.88rem; margin-top: 1.5rem; text-align: center; line-height: 2; }
+
+/* HUD */
+#hud {
+  position: fixed; top: 0; left: 0; right: 0; padding: 10px 14px;
+  display: flex; justify-content: space-between; align-items: center;
+  z-index: 50; pointer-events: none;
+  background: linear-gradient(to bottom, rgba(13,27,42,0.75), transparent);
+}
+.hud-item {
+  color: white; font-size: 0.8rem; font-weight: 600;
+  display: flex; align-items: center; gap: 4px;
+}
+.hud-item .icon { font-size: 1rem; }
+.hud-eaten { font-size: 1.2rem; font-weight: 900; color: #f9c74f; }
+.hud-level {
+  background: rgba(126, 217, 87, 0.25); padding: 4px 12px;
+  border-radius: 20px; border: 1px solid rgba(126, 217, 87, 0.45);
+}
+
+/* Level popup */
+.level-info {
+  font-size: 3.8rem; font-weight: 900; color: #7ed957;
+  text-shadow: 0 0 50px rgba(126, 217, 87, 0.5);
+  animation: pulseIn 0.5s ease-out;
+}
+.level-sub { color: #a0b4c8; font-size: 1.05rem; margin: 8px 0 24px; }
+
+/* Chomp popup */
+.chomp-popup {
+  position: fixed; left: 50%; transform: translateX(-50%);
+  font-size: 1.4rem; font-weight: 900; color: #f9c74f;
+  text-shadow: 0 0 16px rgba(249, 199, 79, 0.5);
+  pointer-events: none; z-index: 60;
+  animation: chompFloat 0.8s ease-out forwards;
+}
+/* Extra life popup */
+.life-popup {
+  position: fixed; left: 50%; top: 40%; transform: translate(-50%, -50%);
+  font-size: 2rem; font-weight: 900; color: #ff6b6b;
+  text-shadow: 0 0 30px rgba(255, 107, 107, 0.7);
+  pointer-events: none; z-index: 60;
+  animation: lifeFloat 1.4s ease-out forwards;
+}
+
+@keyframes pulseIn { from { transform: scale(0.5); opacity: 0; } to { transform: scale(1); opacity: 1; } }
+@keyframes chompFloat { 0% { opacity: 1; top: 55%; } 100% { opacity: 0; top: 40%; } }
+@keyframes lifeFloat { 0% { opacity: 1; transform: translate(-50%, -50%) scale(1); } 100% { opacity: 0; transform: translate(-50%, -70%) scale(1.5); } }
+</style>
+</head>
+<body>
+
+<canvas id="gameCanvas"></canvas>
+
+<div id="hud" style="display:none;">
+  <div class="hud-item hud-level" id="hudLevel">Lv 1</div>
+  <div class="hud-item hud-eaten" id="hudEaten">0</div>
+  <div class="hud-item" id="hudTimer">0:00</div>
+  <div class="hud-item" id="hudLives"><span class="icon">&#10084;</span> <span id="livesCount">3</span></div>
+</div>
+
+<!-- Start Screen -->
+<div class="overlay" id="startScreen">
+  <div class="title">CHOMPY</div>
+  <div class="subtitle">Spin. Chomp. Survive!</div>
+  <button class="btn" onclick="startGame()">PLAY</button>
+  <div class="stats">
+    Drag to patrol the ring<br>
+    Eat every morsel that flies your way<br>
+    Don't let food escape past you!
+  </div>
+</div>
+
+<!-- Level Complete Screen -->
+<div class="overlay hidden" id="levelScreen">
+  <div class="level-info" id="levelTitle">Level 2</div>
+  <div class="level-sub" id="levelSub">Nice chomping!</div>
+  <button class="btn" onclick="nextLevel()">CONTINUE</button>
+  <div class="stats" id="levelStats"></div>
+</div>
+
+<!-- Game Over Screen -->
+<div class="overlay hidden" id="gameOverScreen">
+  <div class="level-info" style="color: #ff6b6b;">GAME OVER</div>
+  <div class="level-sub" id="finalScoreText">Eaten: 0</div>
+  <button class="btn" onclick="startGame()">PLAY AGAIN</button>
+  <div class="stats" id="gameOverStats"></div>
+</div>
+
+<!-- Win Screen -->
+<div class="overlay hidden" id="winScreen">
+  <div class="title">FEAST COMPLETE!</div>
+  <div class="level-sub" id="winScore">Incredible!</div>
+  <button class="btn" onclick="startGame()">PLAY AGAIN</button>
+  <div class="stats" id="winStats"></div>
+</div>
+
+<script>
+// ==================== SOUND ENGINE ====================
+const AudioCtx = window.AudioContext || window.webkitAudioContext;
+let audioCtx;
+
+function ensureAudio() {
+  if (!audioCtx) audioCtx = new AudioCtx();
+  if (audioCtx.state === 'suspended') audioCtx.resume();
+}
+
+function playChomp(pitch = 1) {
+  ensureAudio();
+  // Crunchy bite sound
+  const osc1 = audioCtx.createOscillator();
+  const osc2 = audioCtx.createOscillator();
+  const gain = audioCtx.createGain();
+  const filter = audioCtx.createBiquadFilter();
+  osc1.connect(filter);
+  osc2.connect(filter);
+  filter.connect(gain);
+  gain.connect(audioCtx.destination);
+  filter.type = 'lowpass';
+  filter.frequency.value = 2000 * pitch;
+  osc1.type = 'square';
+  osc1.frequency.setValueAtTime(300 * pitch, audioCtx.currentTime);
+  osc1.frequency.exponentialRampToValueAtTime(80, audioCtx.currentTime + 0.08);
+  osc2.type = 'sawtooth';
+  osc2.frequency.setValueAtTime(150 * pitch, audioCtx.currentTime);
+  osc2.frequency.exponentialRampToValueAtTime(50, audioCtx.currentTime + 0.06);
+  gain.gain.setValueAtTime(0.25, audioCtx.currentTime);
+  gain.gain.exponentialRampToValueAtTime(0.001, audioCtx.currentTime + 0.12);
+  osc1.start(audioCtx.currentTime);
+  osc1.stop(audioCtx.currentTime + 0.12);
+  osc2.start(audioCtx.currentTime);
+  osc2.stop(audioCtx.currentTime + 0.1);
+}
+
+function playBigChomp() {
+  ensureAudio();
+  // Satisfying big munch
+  const t = audioCtx.currentTime;
+  [200, 350, 150].forEach((freq, i) => {
+    const osc = audioCtx.createOscillator();
+    const gain = audioCtx.createGain();
+    osc.connect(gain);
+    gain.connect(audioCtx.destination);
+    osc.type = 'square';
+    osc.frequency.setValueAtTime(freq, t + i * 0.04);
+    osc.frequency.exponentialRampToValueAtTime(60, t + i * 0.04 + 0.1);
+    gain.gain.setValueAtTime(0.2, t + i * 0.04);
+    gain.gain.exponentialRampToValueAtTime(0.001, t + i * 0.04 + 0.12);
+    osc.start(t + i * 0.04);
+    osc.stop(t + i * 0.04 + 0.12);
+  });
+}
+
+function playMiss() {
+  ensureAudio();
+  const osc = audioCtx.createOscillator();
+  const gain = audioCtx.createGain();
+  osc.connect(gain);
+  gain.connect(audioCtx.destination);
+  osc.type = 'sawtooth';
+  osc.frequency.setValueAtTime(250, audioCtx.currentTime);
+  osc.frequency.exponentialRampToValueAtTime(60, audioCtx.currentTime + 0.35);
+  gain.gain.setValueAtTime(0.12, audioCtx.currentTime);
+  gain.gain.exponentialRampToValueAtTime(0.001, audioCtx.currentTime + 0.35);
+  osc.start(audioCtx.currentTime);
+  osc.stop(audioCtx.currentTime + 0.35);
+}
+
+function playExtraLife() {
+  ensureAudio();
+  const melody = [523, 659, 784, 1047];
+  melody.forEach((freq, i) => {
+    const osc = audioCtx.createOscillator();
+    const gain = audioCtx.createGain();
+    osc.connect(gain);
+    gain.connect(audioCtx.destination);
+    osc.type = 'sine';
+    osc.frequency.value = freq;
+    gain.gain.setValueAtTime(0.18, audioCtx.currentTime + i * 0.09);
+    gain.gain.exponentialRampToValueAtTime(0.001, audioCtx.currentTime + i * 0.09 + 0.3);
+    osc.start(audioCtx.currentTime + i * 0.09);
+    osc.stop(audioCtx.currentTime + i * 0.09 + 0.3);
+  });
+}
+
+function playLevelUp() {
+  ensureAudio();
+  const melody = [392, 494, 587, 659, 784, 988];
+  melody.forEach((freq, i) => {
+    const osc = audioCtx.createOscillator();
+    const gain = audioCtx.createGain();
+    osc.connect(gain);
+    gain.connect(audioCtx.destination);
+    osc.type = i < 3 ? 'triangle' : 'sine';
+    osc.frequency.value = freq;
+    gain.gain.setValueAtTime(0.12, audioCtx.currentTime + i * 0.1);
+    gain.gain.exponentialRampToValueAtTime(0.001, audioCtx.currentTime + i * 0.1 + 0.3);
+    osc.start(audioCtx.currentTime + i * 0.1);
+    osc.stop(audioCtx.currentTime + i * 0.1 + 0.3);
+  });
+}
+
+function playGameOver() {
+  ensureAudio();
+  const melody = [440, 370, 311, 261, 220];
+  melody.forEach((freq, i) => {
+    const osc = audioCtx.createOscillator();
+    const gain = audioCtx.createGain();
+    osc.connect(gain);
+    gain.connect(audioCtx.destination);
+    osc.type = 'sawtooth';
+    osc.frequency.value = freq;
+    gain.gain.setValueAtTime(0.1, audioCtx.currentTime + i * 0.22);
+    gain.gain.exponentialRampToValueAtTime(0.001, audioCtx.currentTime + i * 0.22 + 0.4);
+    osc.start(audioCtx.currentTime + i * 0.22);
+    osc.stop(audioCtx.currentTime + i * 0.22 + 0.4);
+  });
+}
+
+// Background beat during gameplay
+let bgInterval = null;
+function startBgBeat() {
+  stopBgBeat();
+  let beatIdx = 0;
+  bgInterval = setInterval(() => {
+    if (!gameRunning) return;
+    ensureAudio();
+    const t = audioCtx.currentTime;
+    const osc = audioCtx.createOscillator();
+    const gain = audioCtx.createGain();
+    osc.connect(gain);
+    gain.connect(audioCtx.destination);
+    osc.type = 'sine';
+    const notes = [110, 110, 130.81, 110];
+    osc.frequency.value = notes[beatIdx % notes.length];
+    gain.gain.setValueAtTime(0.04, t);
+    gain.gain.exponentialRampToValueAtTime(0.001, t + 0.15);
+    osc.start(t);
+    osc.stop(t + 0.15);
+    beatIdx++;
+  }, 500);
+}
+function stopBgBeat() {
+  if (bgInterval) { clearInterval(bgInterval); bgInterval = null; }
+}
+
+// ==================== CANVAS SETUP ====================
+const canvas = document.getElementById('gameCanvas');
+const ctx = canvas.getContext('2d');
+
+let W, H, dpr, CX, CY, ringRadius, charSize;
+function resize() {
+  dpr = window.devicePixelRatio || 1;
+  W = window.innerWidth;
+  H = window.innerHeight;
+  canvas.width = W * dpr;
+  canvas.height = H * dpr;
+  ctx.scale(dpr, dpr);
+  CX = W / 2;
+  CY = H / 2;
+  ringRadius = Math.min(W, H) * 0.38;
+  charSize = Math.min(W, H) * 0.055;
+}
+resize();
+window.addEventListener('resize', resize);
+
+// ==================== GAME STATE ====================
+let gameRunning = false;
+let charAngle = -Math.PI / 2; // Start at top
+let chompAnim = 0; // 0 = closed, >0 = chomping
+let blinkTimer = 0;
+let isBlinking = false;
+
+let items = [];
+let particles = [];
+let warnings = [];
+
+let lives = 3;
+let level = 1;
+let eaten = 0;
+let totalEaten = 0;
+let levelEaten = 0;
+let itemsSpawned = 0;
+let itemsMissed = 0;
+let spawnTimer = 0;
+let levelTimer = 0; // seconds elapsed in level
+let gameTimer = 0; // total game time
+
+// Dragging state
+let isDragging = false;
+let lastDragAngle = 0;
+
+// ==================== LEVEL CONFIG (15 levels) ====================
+const LEVELS = [
+  { items: 10,  speed: 1.0, spawnRate: 2.2,  name: "Appetizer" },
+  { items: 14,  speed: 1.15, spawnRate: 2.0, name: "Warm Up" },
+  { items: 18,  speed: 1.3, spawnRate: 1.8,  name: "Getting Hungry" },
+  { items: 22,  speed: 1.4, spawnRate: 1.6,  name: "Picking Up" },
+  { items: 26,  speed: 1.55, spawnRate: 1.45, name: "Tasty!" },
+  { items: 30,  speed: 1.7, spawnRate: 1.3,  name: "Snack Attack" },
+  { items: 34,  speed: 1.85, spawnRate: 1.2, name: "Feast Mode" },
+  { items: 38,  speed: 2.0, spawnRate: 1.1,  name: "Speed Eater" },
+  { items: 42,  speed: 2.15, spawnRate: 1.0, name: "Nom Frenzy" },
+  { items: 46,  speed: 2.3, spawnRate: 0.9,  name: "Hungry Hungry" },
+  { items: 50,  speed: 2.5, spawnRate: 0.8,  name: "Chompy Pro" },
+  { items: 54,  speed: 2.7, spawnRate: 0.72, name: "Mega Munch" },
+  { items: 58,  speed: 2.9, spawnRate: 0.65, name: "Ultra Feast" },
+  { items: 62,  speed: 3.1, spawnRate: 0.58, name: "God of Nom" },
+  { items: 66,  speed: 3.4, spawnRate: 0.5,  name: "THE FINAL FEAST" },
+];
+
+// Food item types
+const FOOD_TYPES = [
+  { emoji: '🍎', color: '#ff6b6b', name: 'apple' },
+  { emoji: '🍊', color: '#f9844a', name: 'orange' },
+  { emoji: '🍋', color: '#f9c74f', name: 'lemon' },
+  { emoji: '🍇', color: '#9b5de5', name: 'grape' },
+  { emoji: '🍓', color: '#f72585', name: 'strawberry' },
+  { emoji: '🍕', color: '#f4a261', name: 'pizza' },
+  { emoji: '🍩', color: '#e9a1cc', name: 'donut' },
+  { emoji: '🧁', color: '#fec5bb', name: 'cupcake' },
+  { emoji: '🍪', color: '#c9a96e', name: 'cookie' },
+  { emoji: '🌮', color: '#f4d35e', name: 'taco' },
+];
+
+const EATING_ARC = 0.35; // radians (~20 degrees each side = 40 degree total arc)
+
+// ==================== ITEM CREATION ====================
+function createItem(isExtraLife = false) {
+  const lvl = LEVELS[level - 1];
+  // Random angle to travel outward
+  const angle = Math.random() * Math.PI * 2;
+  // Start near center with slight randomness
+  const startDist = 10 + Math.random() * 30;
+  const speed = (0.8 + Math.random() * 0.4) * lvl.speed;
+  const food = FOOD_TYPES[Math.floor(Math.random() * FOOD_TYPES.length)];
+
+  return {
+    angle: angle,
+    dist: startDist,
+    speed: speed,
+    size: 18 + Math.random() * 8,
+    food: food,
+    isExtraLife: isExtraLife,
+    pulse: Math.random() * Math.PI * 2,
+    born: Date.now(),
+    eaten: false,
+    missed: false,
+    fadeOut: 0,
+  };
+}
+
+// ==================== PARTICLE SYSTEM ====================
+function spawnParticles(x, y, color, count) {
+  for (let i = 0; i < count; i++) {
+    const angle = (Math.PI * 2 * i) / count + Math.random() * 0.4;
+    const speed = 2 + Math.random() * 4;
+    particles.push({
+      x, y,
+      vx: Math.cos(angle) * speed,
+      vy: Math.sin(angle) * speed,
+      size: 2 + Math.random() * 4,
+      life: 1,
+      decay: 0.025 + Math.random() * 0.02,
+      color: color,
+    });
+  }
+}
+
+// ==================== WARNING INDICATORS ====================
+function addWarning(angle) {
+  warnings.push({ angle: angle, life: 1.0, decay: 0.015 });
+}
+
+// ==================== GAME LOGIC ====================
+function startGame() {
+  lives = 3;
+  level = 1;
+  totalEaten = 0;
+  gameTimer = 0;
+  resetLevel();
+  gameRunning = true;
+
+  document.getElementById('startScreen').classList.add('hidden');
+  document.getElementById('levelScreen').classList.add('hidden');
+  document.getElementById('gameOverScreen').classList.add('hidden');
+  document.getElementById('winScreen').classList.add('hidden');
+  document.getElementById('hud').style.display = 'flex';
+  updateHUD();
+  startBgBeat();
+}
+
+function resetLevel() {
+  items = [];
+  particles = [];
+  warnings = [];
+  levelEaten = 0;
+  itemsSpawned = 0;
+  itemsMissed = 0;
+  spawnTimer = 0;
+  levelTimer = 0;
+  chompAnim = 0;
+}
+
+function nextLevel() {
+  level++;
+  if (level > LEVELS.length) {
+    gameWin();
+    return;
+  }
+  resetLevel();
+  gameRunning = true;
+  document.getElementById('levelScreen').classList.add('hidden');
+  updateHUD();
+  startBgBeat();
+}
+
+function levelComplete() {
+  gameRunning = false;
+  stopBgBeat();
+  playLevelUp();
+
+  const el = document.getElementById('levelScreen');
+  const next = level + 1;
+  document.getElementById('levelTitle').textContent = next <= LEVELS.length ? `Level ${next}` : 'Victory!';
+  document.getElementById('levelSub').textContent = next <= LEVELS.length ? LEVELS[next - 1].name : 'You conquered every feast!';
+
+  const mins = Math.floor(levelTimer / 60);
+  const secs = Math.floor(levelTimer % 60);
+  document.getElementById('levelStats').innerHTML =
+    `Eaten: ${levelEaten} | Time: ${mins}:${secs < 10 ? '0' : ''}${secs}<br>Total Eaten: ${totalEaten}<br>Lives: ${'&#10084;'.repeat(lives)}`;
+  el.classList.remove('hidden');
+}
+
+function gameOver() {
+  gameRunning = false;
+  stopBgBeat();
+  playGameOver();
+
+  document.getElementById('finalScoreText').textContent = `Total Eaten: ${totalEaten}`;
+  const mins = Math.floor(gameTimer / 60);
+  const secs = Math.floor(gameTimer % 60);
+  document.getElementById('gameOverStats').innerHTML =
+    `Level Reached: ${level}<br>Time: ${mins}:${secs < 10 ? '0' : ''}${secs}`;
+  document.getElementById('gameOverScreen').classList.remove('hidden');
+  document.getElementById('hud').style.display = 'none';
+}
+
+function gameWin() {
+  gameRunning = false;
+  stopBgBeat();
+  playLevelUp();
+
+  document.getElementById('winScore').textContent = `Total Eaten: ${totalEaten}`;
+  const mins = Math.floor(gameTimer / 60);
+  const secs = Math.floor(gameTimer % 60);
+  document.getElementById('winStats').innerHTML =
+    `All 15 levels complete!<br>Time: ${mins}:${secs < 10 ? '0' : ''}${secs}<br>Lives Remaining: ${lives}`;
+  document.getElementById('winScreen').classList.remove('hidden');
+  document.getElementById('hud').style.display = 'none';
+}
+
+function updateHUD() {
+  document.getElementById('hudLevel').textContent = `Lv ${level}`;
+  document.getElementById('hudEaten').textContent = totalEaten;
+  const mins = Math.floor(gameTimer / 60);
+  const secs = Math.floor(gameTimer % 60);
+  document.getElementById('hudTimer').textContent = `${mins}:${secs < 10 ? '0' : ''}${secs}`;
+  document.getElementById('livesCount').textContent = lives;
+}
+
+// ==================== INPUT HANDLING (DRAG) ====================
+function getAngleFromTouch(px, py) {
+  return Math.atan2(py - CY, px - CX);
+}
+
+function normalizeAngle(a) {
+  while (a > Math.PI) a -= Math.PI * 2;
+  while (a < -Math.PI) a += Math.PI * 2;
+  return a;
+}
+
+function onDragStart(px, py) {
+  ensureAudio();
+  isDragging = true;
+  lastDragAngle = getAngleFromTouch(px, py);
+}
+
+function onDragMove(px, py) {
+  if (!isDragging || !gameRunning) return;
+  const newAngle = getAngleFromTouch(px, py);
+  let delta = normalizeAngle(newAngle - lastDragAngle);
+  charAngle += delta;
+  lastDragAngle = newAngle;
+}
+
+function onDragEnd() {
+  isDragging = false;
+}
+
+canvas.addEventListener('touchstart', (e) => {
+  e.preventDefault();
+  const t = e.changedTouches[0];
+  onDragStart(t.clientX, t.clientY);
+}, { passive: false });
+
+canvas.addEventListener('touchmove', (e) => {
+  e.preventDefault();
+  const t = e.changedTouches[0];
+  onDragMove(t.clientX, t.clientY);
+}, { passive: false });
+
+canvas.addEventListener('touchend', (e) => {
+  e.preventDefault();
+  onDragEnd();
+}, { passive: false });
+
+canvas.addEventListener('mousedown', (e) => { onDragStart(e.clientX, e.clientY); });
+canvas.addEventListener('mousemove', (e) => { onDragMove(e.clientX, e.clientY); });
+canvas.addEventListener('mouseup', () => { onDragEnd(); });
+canvas.addEventListener('mouseleave', () => { onDragEnd(); });
+
+// ==================== UI POPUPS ====================
+function showChompPopup(streak, y) {
+  const el = document.createElement('div');
+  el.className = 'chomp-popup';
+  const msgs = ['YUM!', 'CHOMP!', 'NOM NOM!', 'DELICIOUS!', 'TASTY!'];
+  el.textContent = streak >= 5 ? `${streak}x FEAST!` : msgs[Math.floor(Math.random() * msgs.length)];
+  el.style.top = y + 'px';
+  document.body.appendChild(el);
+  setTimeout(() => el.remove(), 800);
+}
+
+function showLifePopup() {
+  const el = document.createElement('div');
+  el.className = 'life-popup';
+  el.textContent = '+1 LIFE!';
+  document.body.appendChild(el);
+  setTimeout(() => el.remove(), 1400);
+}
+
+// ==================== DRAWING ====================
+
+// Draw Chompy character
+function drawChompy(x, y, angle, size, mouthOpen, blink) {
+  ctx.save();
+  ctx.translate(x, y);
+  // Rotate so "forward" (mouth) faces toward center
+  ctx.rotate(angle + Math.PI);
+
+  const r = size;
+
+  // Body shadow
+  ctx.fillStyle = 'rgba(0,0,0,0.15)';
+  ctx.beginPath();
+  ctx.ellipse(2, 3, r * 1.05, r * 1.0, 0, 0, Math.PI * 2);
+  ctx.fill();
+
+  // Body
+  const bodyGrad = ctx.createRadialGradient(-r * 0.25, -r * 0.3, 0, 0, 0, r);
+  bodyGrad.addColorStop(0, '#9aed6e');
+  bodyGrad.addColorStop(0.6, '#7ed957');
+  bodyGrad.addColorStop(1, '#5ab840');
+  ctx.fillStyle = bodyGrad;
+  ctx.beginPath();
+  ctx.arc(0, 0, r, 0, Math.PI * 2);
+  ctx.fill();
+
+  // Body outline
+  ctx.strokeStyle = '#4a9e35';
+  ctx.lineWidth = 1.5;
+  ctx.stroke();
+
+  // Blush (cheeks)
+  ctx.fillStyle = 'rgba(255, 150, 150, 0.35)';
+  ctx.beginPath();
+  ctx.ellipse(-r * 0.55, r * 0.15, r * 0.2, r * 0.14, 0, 0, Math.PI * 2);
+  ctx.fill();
+  ctx.beginPath();
+  ctx.ellipse(r * 0.55, r * 0.15, r * 0.2, r * 0.14, 0, 0, Math.PI * 2);
+  ctx.fill();
+
+  // Eyes
+  const eyeY = -r * 0.15;
+  const eyeSpacing = r * 0.32;
+  const eyeW = r * 0.22;
+  const eyeH = blink ? r * 0.04 : r * 0.28;
+
+  // Left eye white
+  ctx.fillStyle = '#fff';
+  ctx.beginPath();
+  ctx.ellipse(-eyeSpacing, eyeY, eyeW, eyeH, 0, 0, Math.PI * 2);
+  ctx.fill();
+  ctx.strokeStyle = '#3a7a28';
+  ctx.lineWidth = 1;
+  ctx.stroke();
+
+  // Right eye white
+  ctx.beginPath();
+  ctx.ellipse(eyeSpacing, eyeY, eyeW, eyeH, 0, 0, Math.PI * 2);
+  ctx.fill();
+  ctx.stroke();
+
+  if (!blink) {
+    // Pupils (looking forward/inward)
+    const pupilR = r * 0.12;
+    const pupilOffY = r * 0.02;
+    ctx.fillStyle = '#1a1a2e';
+    ctx.beginPath();
+    ctx.arc(-eyeSpacing, eyeY + pupilOffY, pupilR, 0, Math.PI * 2);
+    ctx.fill();
+    ctx.beginPath();
+    ctx.arc(eyeSpacing, eyeY + pupilOffY, pupilR, 0, Math.PI * 2);
+    ctx.fill();
+
+    // Eye highlights
+    const hlR = r * 0.06;
+    ctx.fillStyle = '#fff';
+    ctx.beginPath();
+    ctx.arc(-eyeSpacing - pupilR * 0.4, eyeY + pupilOffY - pupilR * 0.4, hlR, 0, Math.PI * 2);
+    ctx.fill();
+    ctx.beginPath();
+    ctx.arc(eyeSpacing - pupilR * 0.4, eyeY + pupilOffY - pupilR * 0.4, hlR, 0, Math.PI * 2);
+    ctx.fill();
+  }
+
+  // Mouth
+  if (mouthOpen > 0.15) {
+    // BIG CHOMP MOUTH
+    const mouthR = r * 0.45 * mouthOpen;
+    const mouthY = r * 0.35;
+
+    // Open mouth (dark inside)
+    ctx.fillStyle = '#c0392b';
+    ctx.beginPath();
+    ctx.arc(0, mouthY, mouthR, 0, Math.PI * 2);
+    ctx.fill();
+
+    // Inner dark
+    ctx.fillStyle = '#7a1a1a';
+    ctx.beginPath();
+    ctx.arc(0, mouthY, mouthR * 0.65, 0, Math.PI * 2);
+    ctx.fill();
+
+    // Top teeth
+    ctx.fillStyle = '#fff';
+    const teethW = mouthR * 0.3;
+    const teethH = mouthR * 0.3;
+    for (let t = -1; t <= 1; t += 2) {
+      ctx.beginPath();
+      ctx.moveTo(t * teethW * 0.8, mouthY - mouthR + 1);
+      ctx.lineTo(t * teethW * 0.8 - teethW * 0.5, mouthY - mouthR + 1);
+      ctx.lineTo(t * teethW * 0.8 - teethW * 0.25, mouthY - mouthR + teethH);
+      ctx.closePath();
+      ctx.fill();
+    }
+  } else {
+    // Happy smile
+    ctx.strokeStyle = '#3a7a28';
+    ctx.lineWidth = 2;
+    ctx.lineCap = 'round';
+    ctx.beginPath();
+    ctx.arc(0, r * 0.25, r * 0.28, 0.15 * Math.PI, 0.85 * Math.PI);
+    ctx.stroke();
+  }
+
+  ctx.restore();
+}
+
+// Draw a food item
+function drawFoodItem(item) {
+  const ix = CX + Math.cos(item.angle) * item.dist;
+  const iy = CY + Math.sin(item.angle) * item.dist;
+  const scale = 0.5 + (item.dist / ringRadius) * 0.6;
+  const size = item.size * scale;
+
+  ctx.save();
+  ctx.globalAlpha = item.fadeOut > 0 ? Math.max(0, 1 - item.fadeOut) : 1;
+
+  if (item.isExtraLife) {
+    // Golden sparkly star
+    const pulse = 1 + Math.sin(item.pulse) * 0.15;
+    const s = size * pulse;
+    ctx.shadowColor = 'rgba(255, 215, 0, 0.7)';
+    ctx.shadowBlur = 12 + Math.sin(item.pulse * 2) * 6;
+
+    ctx.fillStyle = `hsl(50, 100%, ${55 + Math.sin(item.pulse) * 10}%)`;
+    ctx.beginPath();
+    for (let j = 0; j < 5; j++) {
+      const a1 = (j * 4 * Math.PI) / 5 - Math.PI / 2;
+      const a2 = a1 + (2 * Math.PI) / 10;
+      ctx.lineTo(ix + s * Math.cos(a1), iy + s * Math.sin(a1));
+      ctx.lineTo(ix + s * 0.45 * Math.cos(a2), iy + s * 0.45 * Math.sin(a2));
+    }
+    ctx.closePath();
+    ctx.fill();
+
+    // Inner glow
+    const grad = ctx.createRadialGradient(ix, iy, 0, ix, iy, s);
+    grad.addColorStop(0, 'rgba(255, 255, 220, 0.5)');
+    grad.addColorStop(1, 'rgba(255, 215, 0, 0)');
+    ctx.fillStyle = grad;
+    ctx.beginPath();
+    ctx.arc(ix, iy, s, 0, Math.PI * 2);
+    ctx.fill();
+
+    ctx.shadowBlur = 0;
+
+    // Heart symbol inside
+    ctx.fillStyle = '#fff';
+    ctx.font = `${s * 0.7}px sans-serif`;
+    ctx.textAlign = 'center';
+    ctx.textBaseline = 'middle';
+    ctx.fillText('❤', ix, iy + 1);
+  } else {
+    // Colorful food circle with emoji
+    const pulse = 1 + Math.sin(item.pulse) * 0.08;
+    const s = size * pulse;
+
+    // Glow
+    ctx.shadowColor = item.food.color;
+    ctx.shadowBlur = 8;
+
+    // Circle body
+    const grad = ctx.createRadialGradient(ix - s * 0.2, iy - s * 0.2, 0, ix, iy, s);
+    grad.addColorStop(0, lightenColor(item.food.color, 30));
+    grad.addColorStop(1, item.food.color);
+    ctx.fillStyle = grad;
+    ctx.beginPath();
+    ctx.arc(ix, iy, s, 0, Math.PI * 2);
+    ctx.fill();
+
+    ctx.shadowBlur = 0;
+
+    // Emoji on top
+    ctx.font = `${s * 1.1}px sans-serif`;
+    ctx.textAlign = 'center';
+    ctx.textBaseline = 'middle';
+    ctx.fillText(item.food.emoji, ix, iy + 1);
+  }
+
+  ctx.restore();
+}
+
+function lightenColor(hex, amt) {
+  let r = parseInt(hex.slice(1, 3), 16);
+  let g = parseInt(hex.slice(3, 5), 16);
+  let b = parseInt(hex.slice(5, 7), 16);
+  r = Math.min(255, r + amt);
+  g = Math.min(255, g + amt);
+  b = Math.min(255, b + amt);
+  return `rgb(${r},${g},${b})`;
+}
+
+// ==================== RENDER LOOP ====================
+let lastTime = 0;
+let streakCount = 0;
+let streakTimer = 0;
+
+function gameLoop(timestamp) {
+  const dt = Math.min((timestamp - lastTime) / 1000, 0.05);
+  lastTime = timestamp;
+
+  // Clear
+  ctx.fillStyle = '#0d1b2a';
+  ctx.fillRect(0, 0, W, H);
+
+  // Background: subtle radial pattern
+  const bgGrad = ctx.createRadialGradient(CX, CY, 0, CX, CY, ringRadius * 1.5);
+  bgGrad.addColorStop(0, 'rgba(30, 60, 90, 0.3)');
+  bgGrad.addColorStop(0.5, 'rgba(13, 27, 42, 0.1)');
+  bgGrad.addColorStop(1, 'rgba(13, 27, 42, 0)');
+  ctx.fillStyle = bgGrad;
+  ctx.fillRect(0, 0, W, H);
+
+  // Draw concentric decorative rings
+  for (let i = 3; i >= 1; i--) {
+    ctx.strokeStyle = `rgba(126, 217, 87, ${0.03 * i})`;
+    ctx.lineWidth = 1;
+    ctx.beginPath();
+    ctx.arc(CX, CY, ringRadius * (i * 0.25), 0, Math.PI * 2);
+    ctx.stroke();
+  }
+
+  // Draw the main ring
+  ctx.strokeStyle = 'rgba(126, 217, 87, 0.2)';
+  ctx.lineWidth = 3;
+  ctx.beginPath();
+  ctx.arc(CX, CY, ringRadius, 0, Math.PI * 2);
+  ctx.stroke();
+
+  // Ring glow
+  ctx.strokeStyle = 'rgba(126, 217, 87, 0.06)';
+  ctx.lineWidth = 12;
+  ctx.beginPath();
+  ctx.arc(CX, CY, ringRadius, 0, Math.PI * 2);
+  ctx.stroke();
+
+  // Draw eating arc indicator (subtle)
+  if (gameRunning) {
+    ctx.strokeStyle = 'rgba(126, 217, 87, 0.15)';
+    ctx.lineWidth = 6;
+    ctx.beginPath();
+    ctx.arc(CX, CY, ringRadius, charAngle - EATING_ARC, charAngle + EATING_ARC);
+    ctx.stroke();
+  }
+
+  if (gameRunning) {
+    const lvl = LEVELS[level - 1];
+
+    // Update timers
+    levelTimer += dt;
+    gameTimer += dt;
+
+    // Spawn items
+    spawnTimer -= dt;
+    if (spawnTimer <= 0 && itemsSpawned < lvl.items) {
+      // Check for extra life (from level 3 onward, every ~12 items, 50% chance)
+      const canExtraLife = level >= 3;
+      const isExtra = canExtraLife && itemsSpawned > 0 && itemsSpawned % 12 === 0 && Math.random() < 0.5;
+
+      const newItem = createItem(isExtra);
+      items.push(newItem);
+      addWarning(newItem.angle);
+      itemsSpawned++;
+
+      // Also spawn the real item if we spawned an extra life (don't count extra as regular)
+      if (isExtra && itemsSpawned < lvl.items) {
+        const realItem = createItem(false);
+        items.push(realItem);
+        addWarning(realItem.angle);
+        itemsSpawned++;
+      }
+
+      spawnTimer = lvl.spawnRate * (0.7 + Math.random() * 0.6);
+    }
+
+    // Update streak timer
+    if (streakTimer > 0) {
+      streakTimer -= dt;
+      if (streakTimer <= 0) streakCount = 0;
+    }
+
+    // Blink timer
+    blinkTimer -= dt;
+    if (blinkTimer <= 0) {
+      if (isBlinking) {
+        isBlinking = false;
+        blinkTimer = 2 + Math.random() * 4;
+      } else {
+        isBlinking = true;
+        blinkTimer = 0.12;
+      }
+    }
+
+    // Update chomp animation
+    if (chompAnim > 0) {
+      chompAnim -= dt * 5;
+      if (chompAnim < 0) chompAnim = 0;
+    }
+
+    // Update items
+    for (let i = items.length - 1; i >= 0; i--) {
+      const item = items[i];
+      item.pulse += dt * 4;
+
+      if (item.fadeOut > 0) {
+        item.fadeOut += dt * 3;
+        if (item.fadeOut >= 1) {
+          items.splice(i, 1);
+        }
+        continue;
+      }
+
+      // Move outward
+      item.dist += item.speed * 120 * dt;
+
+      // Check if crossing the ring
+      if (item.dist >= ringRadius - charSize * 0.5 && item.dist <= ringRadius + charSize * 1.5 && !item.eaten && !item.missed) {
+        const angleDiff = Math.abs(normalizeAngle(item.angle - charAngle));
+
+        if (angleDiff <= EATING_ARC) {
+          // EATEN!
+          item.eaten = true;
+          item.fadeOut = 0.01;
+
+          const ix = CX + Math.cos(item.angle) * item.dist;
+          const iy = CY + Math.sin(item.angle) * item.dist;
+
+          if (item.isExtraLife) {
+            lives++;
+            playExtraLife();
+            showLifePopup();
+            spawnParticles(ix, iy, '#ffd700', 16);
+          } else {
+            levelEaten++;
+            totalEaten++;
+            streakCount++;
+            streakTimer = 1.5;
+
+            if (streakCount >= 3) {
+              playBigChomp();
+              showChompPopup(streakCount, iy);
+            } else {
+              playChomp(0.9 + Math.random() * 0.3);
+            }
+            spawnParticles(ix, iy, item.food.color, 10);
+          }
+
+          chompAnim = 1.0;
+          updateHUD();
+        }
+      }
+
+      // Escaped past ring
+      if (item.dist > ringRadius + charSize * 2 && !item.eaten && !item.missed) {
+        item.missed = true;
+        item.fadeOut = 0.01;
+
+        if (!item.isExtraLife) {
+          lives--;
+          itemsMissed++;
+          playMiss();
+          updateHUD();
+
+          if (lives <= 0) {
+            gameOver();
+            requestAnimationFrame(gameLoop);
+            return;
+          }
+        }
+      }
+
+      // Way past ring, remove
+      if (item.dist > ringRadius * 1.8) {
+        items.splice(i, 1);
+      }
+    }
+
+    // Check level complete
+    if (itemsSpawned >= lvl.items) {
+      const activeItems = items.filter(it => !it.eaten && !it.missed && it.fadeOut === 0 && !it.isExtraLife);
+      if (activeItems.length === 0) {
+        levelComplete();
+      }
+    }
+
+    updateHUD();
+  }
+
+  // Draw warning indicators on ring
+  for (let i = warnings.length - 1; i >= 0; i--) {
+    const w = warnings[i];
+    w.life -= w.decay;
+    if (w.life <= 0) {
+      warnings.splice(i, 1);
+      continue;
+    }
+    const wx = CX + Math.cos(w.angle) * ringRadius;
+    const wy = CY + Math.sin(w.angle) * ringRadius;
+    const alpha = w.life * 0.4;
+    ctx.fillStyle = `rgba(255, 200, 60, ${alpha})`;
+    ctx.beginPath();
+    ctx.arc(wx, wy, 6 + (1 - w.life) * 8, 0, Math.PI * 2);
+    ctx.fill();
+  }
+
+  // Draw items
+  items.forEach(item => drawFoodItem(item));
+
+  // Draw particles
+  for (let i = particles.length - 1; i >= 0; i--) {
+    const p = particles[i];
+    p.x += p.vx * 60 * dt;
+    p.y += p.vy * 60 * dt;
+    p.vy += 2 * dt;
+    p.life -= p.decay;
+    p.size *= 0.97;
+
+    if (p.life <= 0 || p.size < 0.3) {
+      particles.splice(i, 1);
+      continue;
+    }
+
+    ctx.globalAlpha = p.life;
+    ctx.fillStyle = p.color;
+    ctx.shadowColor = p.color;
+    ctx.shadowBlur = 6;
+    ctx.beginPath();
+    ctx.arc(p.x, p.y, p.size, 0, Math.PI * 2);
+    ctx.fill();
+    ctx.shadowBlur = 0;
+    ctx.globalAlpha = 1;
+  }
+
+  // Draw Chompy
+  const charX = CX + Math.cos(charAngle) * ringRadius;
+  const charY = CY + Math.sin(charAngle) * ringRadius;
+  drawChompy(charX, charY, charAngle, charSize, chompAnim, isBlinking);
+
+  // Center decoration (small pulsing dot)
+  const centerPulse = 0.4 + Math.sin(Date.now() * 0.003) * 0.2;
+  ctx.fillStyle = `rgba(126, 217, 87, ${centerPulse})`;
+  ctx.beginPath();
+  ctx.arc(CX, CY, 4, 0, Math.PI * 2);
+  ctx.fill();
+
+  requestAnimationFrame(gameLoop);
+}
+
+requestAnimationFrame(gameLoop);
+</script>
+</body>
+</html>
