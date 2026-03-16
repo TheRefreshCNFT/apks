@@ -96,7 +96,9 @@ canvas { display: block; width: 100%; height: 100%; }
 
 <div id="hud" style="display:none;">
   <div class="hud-item hud-level" id="hudLevel">Level 1</div>
+  <div class="hud-item" id="hudTime">0:00</div>
   <div class="hud-item hud-score" id="hudScore">0</div>
+  <div class="hud-item" id="hudHitMiss">0/0</div>
   <div class="hud-item" id="hudLives"><span class="icon">&#10084;</span> <span id="livesCount">3</span></div>
 </div>
 
@@ -278,21 +280,36 @@ let orbsSpawned = 0;
 let starSpawnedThisRound = false;
 let gameRunning = false;
 let spawnTimer = 0;
+let gameStartTime = 0;
+let totalTimePlayed = 0;
+let totalMissed = 0;
 let bgStars = [];
 
-// Level configs
-const LEVELS = [
-  { orbs: 10, speed: 1.0, spawnRate: 1.8, colors: 2, minSize: 32, maxSize: 50, name: "Warm Up" },
-  { orbs: 15, speed: 1.2, spawnRate: 1.5, colors: 3, minSize: 30, maxSize: 48, name: "Getting Started" },
-  { orbs: 20, speed: 1.4, spawnRate: 1.3, colors: 3, minSize: 28, maxSize: 46, name: "Picking Up" },
-  { orbs: 25, speed: 1.6, spawnRate: 1.1, colors: 4, minSize: 26, maxSize: 44, name: "Faster!" },
-  { orbs: 30, speed: 1.8, spawnRate: 1.0, colors: 4, minSize: 24, maxSize: 42, name: "Tricky" },
-  { orbs: 35, speed: 2.0, spawnRate: 0.9, colors: 5, minSize: 22, maxSize: 40, name: "Intense" },
-  { orbs: 40, speed: 2.2, spawnRate: 0.8, colors: 5, minSize: 20, maxSize: 38, name: "Frenzy" },
-  { orbs: 45, speed: 2.4, spawnRate: 0.7, colors: 6, minSize: 20, maxSize: 36, name: "Chaos" },
-  { orbs: 50, speed: 2.6, spawnRate: 0.6, colors: 6, minSize: 18, maxSize: 34, name: "Insane" },
-  { orbs: 60, speed: 2.8, spawnRate: 0.5, colors: 7, minSize: 16, maxSize: 32, name: "FINAL BOSS" },
+// Level configs - 15 rounds with accelerating speed
+const LEVEL_NAMES = [
+  "Warm Up", "Getting Started", "Picking Up", "Faster!", "Tricky",
+  "Intense", "Frenzy", "Chaos", "Insane", "Brutal",
+  "Nightmare", "Overdrive", "Supernova", "Impossible", "FINAL BOSS"
 ];
+const LEVELS = [];
+{
+  let speed = 1.0;
+  let delta = 0.5;
+  for (let i = 0; i < 15; i++) {
+    const t = i / 14;
+    LEVELS.push({
+      orbs: Math.round(10 + t * 50),
+      speed: speed,
+      spawnRate: Math.max(0.15, 1.8 / speed),
+      colors: Math.min(2 + Math.floor(t * 5), ORB_COLORS.length),
+      minSize: Math.round(32 - t * 16),
+      maxSize: Math.round(50 - t * 18),
+      name: LEVEL_NAMES[i],
+    });
+    speed += delta;
+    delta += 0.25;
+  }
+}
 
 const ORB_COLORS = [
   { h: 280, s: 80, l: 65, glow: 'rgba(160, 100, 255, 0.5)' },   // Purple
@@ -376,6 +393,9 @@ function startGame() {
   starSpawnedThisRound = false;
   orbsNeeded = LEVELS[0].orbs;
   spawnTimer = 0;
+  gameStartTime = Date.now();
+  totalTimePlayed = 0;
+  totalMissed = 0;
   gameRunning = true;
 
   document.getElementById('startScreen').classList.add('hidden');
@@ -392,6 +412,9 @@ function nextLevel() {
     gameWin();
     return;
   }
+  totalMissed += orbsMissed;
+  totalTimePlayed += (Date.now() - gameStartTime) / 1000;
+  gameStartTime = Date.now();
   orbsPopped = 0;
   orbsMissed = 0;
   orbsSpawned = 0;
@@ -413,39 +436,55 @@ function levelComplete() {
 
   const el = document.getElementById('levelScreen');
   const next = level + 1;
+  const elapsed = totalTimePlayed + (Date.now() - gameStartTime) / 1000;
+  const misses = totalMissed + orbsMissed;
   document.getElementById('levelTitle').textContent = next <= LEVELS.length ? `Level ${next}` : 'Victory!';
   document.getElementById('levelSub').textContent = next <= LEVELS.length ? LEVELS[next - 1].name : 'You completed all levels!';
   document.getElementById('levelStats').innerHTML =
-    `Orbs Popped: ${orbsPopped}<br>Score: ${score}<br>Lives: ${'&#10084;'.repeat(lives)}`;
+    `Orbs Popped: ${orbsPopped}<br>Score: ${score}<br>Time: ${formatTime(elapsed)}<br>Hit/Miss: ${totalPopped}/${misses}<br>Lives: ${'&#10084;'.repeat(lives)}`;
   el.classList.remove('hidden');
 }
 
 function gameOver() {
+  totalTimePlayed += (Date.now() - gameStartTime) / 1000;
+  totalMissed += orbsMissed;
   gameRunning = false;
   playGameOver();
 
   document.getElementById('finalScoreText').textContent = `Score: ${score}`;
   document.getElementById('gameOverStats').innerHTML =
-    `Level Reached: ${level}<br>Total Orbs Popped: ${totalPopped}`;
+    `Level Reached: ${level}<br>Total Orbs Popped: ${totalPopped}<br>Time: ${formatTime(totalTimePlayed)}<br>Hit/Miss: ${totalPopped}/${totalMissed}`;
   document.getElementById('gameOverScreen').classList.remove('hidden');
   document.getElementById('hud').style.display = 'none';
 }
 
 function gameWin() {
+  totalTimePlayed += (Date.now() - gameStartTime) / 1000;
+  totalMissed += orbsMissed;
   gameRunning = false;
   playLevelUp();
 
   document.getElementById('winScore').textContent = `Final Score: ${score}`;
   document.getElementById('winStats').innerHTML =
-    `All 10 levels complete!<br>Total Orbs Popped: ${totalPopped}<br>Lives Remaining: ${lives}`;
+    `All 15 levels complete!<br>Total Orbs Popped: ${totalPopped}<br>Time: ${formatTime(totalTimePlayed)}<br>Hit/Miss: ${totalPopped}/${totalMissed}<br>Lives Remaining: ${lives}`;
   document.getElementById('winScreen').classList.remove('hidden');
   document.getElementById('hud').style.display = 'none';
+}
+
+function formatTime(secs) {
+  const m = Math.floor(secs / 60);
+  const s = Math.floor(secs % 60);
+  return `${m}:${s < 10 ? '0' : ''}${s}`;
 }
 
 function updateHUD() {
   document.getElementById('hudLevel').textContent = `Lv ${level}`;
   document.getElementById('hudScore').textContent = score;
   document.getElementById('livesCount').textContent = lives;
+  const elapsed = totalTimePlayed + (gameRunning ? (Date.now() - gameStartTime) / 1000 : 0);
+  document.getElementById('hudTime').textContent = formatTime(elapsed);
+  const misses = totalMissed + orbsMissed;
+  document.getElementById('hudHitMiss').textContent = `${totalPopped}/${misses}`;
 }
 
 // ==================== INPUT ====================
@@ -616,6 +655,9 @@ function gameLoop(timestamp) {
       // Pulsing size
       orb.size = orb.baseSize + Math.sin(orb.pulse) * 2;
     }
+
+    // Update time display
+    updateHUD();
 
     // Check if level complete (all spawned, all popped or missed)
     if (orbsSpawned >= orbsNeeded && orbs.filter(o => !o.isExtraLife).length === 0 && orbsPopped + orbsMissed >= orbsNeeded) {
