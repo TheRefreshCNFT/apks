@@ -307,6 +307,16 @@ let totalTimePlayed = 0;
 let totalMissed = 0;
 let bgStars = [];
 
+const ORB_COLORS = [
+  { h: 280, s: 80, l: 65, glow: 'rgba(160, 100, 255, 0.5)' },   // Purple
+  { h: 190, s: 90, l: 55, glow: 'rgba(0, 200, 255, 0.5)' },     // Cyan
+  { h: 330, s: 85, l: 65, glow: 'rgba(255, 100, 180, 0.5)' },   // Pink
+  { h: 140, s: 80, l: 55, glow: 'rgba(50, 220, 100, 0.5)' },    // Green
+  { h: 40, s: 90, l: 60, glow: 'rgba(255, 180, 50, 0.5)' },     // Orange
+  { h: 60, s: 95, l: 55, glow: 'rgba(255, 230, 50, 0.5)' },     // Yellow
+  { h: 0, s: 85, l: 60, glow: 'rgba(255, 80, 80, 0.5)' },       // Red
+];
+
 // Level configs - 15 rounds with accelerating speed
 const LEVEL_NAMES = [
   "Warm Up", "Getting Started", "Picking Up", "Faster!", "Tricky",
@@ -332,16 +342,6 @@ const LEVELS = [];
     delta += 0.25;
   }
 }
-
-const ORB_COLORS = [
-  { h: 280, s: 80, l: 65, glow: 'rgba(160, 100, 255, 0.5)' },   // Purple
-  { h: 190, s: 90, l: 55, glow: 'rgba(0, 200, 255, 0.5)' },     // Cyan
-  { h: 330, s: 85, l: 65, glow: 'rgba(255, 100, 180, 0.5)' },   // Pink
-  { h: 140, s: 80, l: 55, glow: 'rgba(50, 220, 100, 0.5)' },    // Green
-  { h: 40, s: 90, l: 60, glow: 'rgba(255, 180, 50, 0.5)' },     // Orange
-  { h: 60, s: 95, l: 55, glow: 'rgba(255, 230, 50, 0.5)' },     // Yellow
-  { h: 0, s: 85, l: 60, glow: 'rgba(255, 80, 80, 0.5)' },       // Red
-];
 
 // Init background stars
 function initStars() {
