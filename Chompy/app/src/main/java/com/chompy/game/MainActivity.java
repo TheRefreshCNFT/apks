@@ -10,7 +10,6 @@ import android.webkit.WebChromeClient;
 import android.webkit.WebSettings;
 import android.webkit.WebView;
 import android.webkit.WebViewClient;
-import java.lang.reflect.Method;
 
 public class MainActivity extends Activity {
     private WebView webView;
@@ -49,37 +48,6 @@ public class MainActivity extends Activity {
     }
 
     private void hideSystemUI() {
-        if (Build.VERSION.SDK_INT >= 30) {
-            try {
-                Method setDecorFitsSystemWindows = Window.class.getMethod(
-                    "setDecorFitsSystemWindows", boolean.class);
-                setDecorFitsSystemWindows.invoke(getWindow(), false);
-
-                Method getInsetsController = Window.class.getMethod("getInsetsController");
-                Object controller = getInsetsController.invoke(getWindow());
-                if (controller != null) {
-                    Class<?> typeClass = Class.forName("android.view.WindowInsets$Type");
-                    Method statusBars = typeClass.getMethod("statusBars");
-                    Method navigationBars = typeClass.getMethod("navigationBars");
-                    int types = ((Integer) statusBars.invoke(null))
-                              | ((Integer) navigationBars.invoke(null));
-
-                    Method hide = controller.getClass().getMethod("hide", int.class);
-                    hide.invoke(controller, types);
-
-                    Method setBehavior = controller.getClass().getMethod(
-                        "setSystemBarsBehavior", int.class);
-                    setBehavior.invoke(controller, 2); // BEHAVIOR_SHOW_TRANSIENT_BARS_BY_SWIPE
-                }
-            } catch (Exception e) {
-                hideSystemUILegacy();
-            }
-        } else {
-            hideSystemUILegacy();
-        }
-    }
-
-    private void hideSystemUILegacy() {
         webView.setSystemUiVisibility(
             View.SYSTEM_UI_FLAG_IMMERSIVE_STICKY
             | View.SYSTEM_UI_FLAG_FULLSCREEN
